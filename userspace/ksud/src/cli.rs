@@ -413,6 +413,10 @@ enum Umount {
         /// mount point path
         mnt: String,
     },
+    /// List all mount points in umount list
+    List,
+    /// Save current umount list to file
+    Save,
     /// Apply saved umount list from file to kernel
     Apply,
     /// Clear custom umount paths (wipe kernel list)
@@ -476,8 +480,8 @@ enum Susfs {
 pub fn run() -> Result<()> {
     android_logger::init_once(
         Config::default()
-            .with_max_level(LevelFilter::Trace) // limit log level
-            .with_tag("KernelSU"), // logs will show under mytag tag
+            .with_max_level(crate::debug_select!(LevelFilter::Trace, LevelFilter::Info))
+            .with_tag("KernelSU"),
     );
 
     // the kernel executes su with argv[0] = "su" and replace it with us
@@ -704,7 +708,13 @@ pub fn run() -> Result<()> {
         Commands::BootRestore(boot_restore) => crate::boot_patch::restore(boot_restore),
         Commands::Umount { command } => match command {
             Umount::Add { mnt, flags } => ksucalls::umount_list_add(&mnt, flags),
-            Umount::Remove { mnt } => ksucalls::umount_list_del(&mnt),
+            Umount::Remove { mnt } => umount::remove_umount_entry_from_config(&mnt),
+            Umount::List => {
+                let list = ksucalls::umount_list_list()?;
+                print!("{list}");
+                Ok(())
+            }
+            Umount::Save => umount::save_umount_config(),
             Umount::Apply => umount::apply_umount_config(),
             Umount::ClearCustom => umount::clear_umount_config(),
         },
